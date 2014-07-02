@@ -1,0 +1,58 @@
+{
+   "abstract" : "Schema versioning for DBIx::Class with version information embedded inline in the schema definition.",
+   "author" : [
+      "Peter Mottram (SysPete) <peter@sysnix.com>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.141520",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "DBIx-Class-Schema-Versioned-Inline",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "DBD::SQLite" : "1.4",
+            "DBIx::Class::Schema::Loader" : "0.0704",
+            "File::Spec" : "3.47",
+            "Test::Most" : "0.33",
+            "Test::Roo" : "1.003",
+            "Test::Warnings" : "0.012"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : "0"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "DBIx::Class" : "0.0827",
+            "SQL::Translator" : "0.11018",
+            "Try::Tiny" : "0.18",
+            "perl" : "5.006",
+            "version" : "0.9902"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/Sysnix/dbix-class-schema-versioned-inline/issues"
+      },
+      "repository" : {
+         "url" : "https://github.com/Sysnix/dbix-class-schema-versioned-inline.git"
+      }
+   },
+   "version" : "0.001"
+}
