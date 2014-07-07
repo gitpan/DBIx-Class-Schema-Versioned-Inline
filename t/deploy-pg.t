@@ -15,7 +15,9 @@ plan skip_all => "Test::PostgreSQL required" if $@;
 
 sub _build_database {
     my $self = shift;
-    my $pgsql = Test::PostgreSQL->new() or die;
+    no warnings 'once';
+    my $pgsql = Test::PostgreSQL->new()
+        or plan skip_all => $Test::PostgreSQL::errstr;
     return $pgsql;
 }
 
