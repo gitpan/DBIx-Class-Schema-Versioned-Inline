@@ -18,11 +18,11 @@ This is BETA software so the usual caveats apply.
 
 =head1 VERSION
 
-Version 0.010
+Version 0.011
 
 =cut
 
-our $VERSION = '0.010';
+our $VERSION = '0.011';
 
 =head1 SYNOPSIS
 
@@ -216,6 +216,8 @@ And when renaming a column:
 
 As can been seen in the example it is possible to modify column definitions at the same time as a rename but care should be taken to ensure that any data modification (such as ensuring there are no longer null values when is_nullable => 0 is introduced) must be handled via L</Upgrade.pm>.
 
+NOTE: if columns are renamed at the same version that a class/table is renamed (for example a renamed PK) then you MUST also add C<renamed_from> to the column as otherwise data from that column will be lost. In this special situation adding C<since> to the column is not required.
+
 =head2 changes
 
 Column definition changes are handled using the C<changes> token. A hashref is created for each version where the column definition changes which details the new column definition in effect from that change revision. For example:
@@ -268,7 +270,7 @@ use SQL::Translator::Diff;
 use Try::Tiny;
 use version 0.77;
 
-our @schema_versions;
+our ( @schema_versions, %upgrades );
 
 =head1 METHODS
 
@@ -328,13 +330,6 @@ sub ordered_schema_versions {
 
     # add schema and database versions to list
     push @schema_versions, $self->get_db_version, $self->schema_version;
-
-    # add Upgrade versions
-    my $upgradeclass = ref($self) . "::Upgrade";
-    eval {
-        eval "require $upgradeclass" or return;
-        push @schema_versions, $upgradeclass->versions;
-    };
 
     return sort _byversion do {
         my %seen;
@@ -417,13 +412,8 @@ sub upgrade_single_step {
         push @$connect_info, undef;
     }
 
-    # drop anything extra
-    while ( scalar @$connect_info > 3 ) {
-        pop @$connect_info;
-    }
-
     # add next version
-    push @$connect_info, { _version => $target_version };
+    $connect_info->[3]->{_version} = $target_version;
 
     my $target_schema = ref($self)->connect(@$connect_info);
 
@@ -440,17 +430,36 @@ sub upgrade_single_step {
     $target_sqlt->show_warnings(0);
     $target_sqlt->translate;
 
-    # we need to add class (table) renamed_from into $target_sqlt->schema->extra
+    # we need to add renamed_from into $target_sqlt->schema extras
 
     foreach my $source_name ( $target_schema->sources ) {
+
         my $source    = $target_schema->source($source_name);
-        my $versioned = $source->resultset_attributes->{versioned};
+
+        # tables
+
+        my $table       = $target_sqlt->schema->get_table( $source->name );
+        my $versioned   = $source->resultset_attributes->{versioned};
+        my $table_since = $versioned->{since} ? $versioned->{since} : undef;
+
         if (   $versioned
             && $versioned->{renamed_from}
-            && $versioned->{since} eq $target_version )
+            && $table_since eq $target_version )
         {
-            my $table = $target_sqlt->schema->get_table( $source->name );
             $table->extra( renamed_from => $versioned->{renamed_from} );
+        }
+
+        # columns
+
+        foreach my $column ( $source->columns ) {
+            my $versioned = $source->column_info($column)->{versioned};
+            if ( $versioned && $versioned->{renamed_from} ) {
+                my $since = $versioned->{since} || $table_since;
+                if ( $since eq $target_version ) {
+                    my $field = $table->get_field($column);
+                    $field->extra( renamed_from => $versioned->{renamed_from} );
+                }
+            }
         }
     }
 
@@ -471,24 +480,55 @@ sub upgrade_single_step {
     try {
         $self->txn_do(
             sub {
+
+                # Upgrade.pm before
+
                 foreach my $sub (@before_upgrade_subs) {
-                    $sub->($self) or die;
+                    $sub->($self)
+                        or die "Failed upgrade before $target_version sub";
                 }
+
+                # execute SQL one line at a time
+
                 foreach my $line (@diff) {
 
                     # drop comments and BEGIN/COMMIT
                     next if $line =~ /(^--|BEGIN|COMMIT)/;
+
                     $self->storage->dbh_do(
                         sub {
                             my ( $storage, $dbh ) = @_;
-
                             $dbh->do($line);
                         }
                     );
                 }
-                # 'after' steps use $target_schema
-                foreach my $sub (@after_upgrade_subs) {
-                    $sub->($target_schema) or die;
+
+                # Upgrade.pm after
+
+                unless ( $sqlt_type =~ /^(PostgreSQL|SQLite)$/ ) {
+
+                    # FIXME: sadly we can't do this as part of this transaction
+                    # in Pg & SQLite - reason still to be determined
+
+                    foreach my $sub (@after_upgrade_subs) {
+                        $sub->($target_schema)
+                            or die "Failed upgrade after $target_version sub";
+                    }
+                }
+            }
+        );
+
+        $self->txn_do(
+            sub {
+                if ( $sqlt_type =~ /^(PostgreSQL|SQLite)$/ ) {
+
+                    # FIXME: see comments within transaction above
+                    # perform the 'after' steps we were forced to skip earlier
+
+                    foreach my $sub (@after_upgrade_subs) {
+                        $sub->($target_schema)
+                            or die "Failed upgrade after $target_version sub";
+                    }
                 }
             }
         );
@@ -553,19 +593,15 @@ sub versioned_schema {
 
             # handled renamed column
 
-            if ( $since && $renamed && $_version eq $since ) {
+            if ( $renamed ) {
+                unless ($since) {
 
-                # we need renamed_from to be in "extra" for SQLT
+                    # catch sitation where class has since but renamed_from
+                    # on column does not (renamed PK columns for example)
 
-                $column_info->{extra}->{renamed_from} = $renamed;
-
-                unless ( $source->remove_column($column)
-                    && $source->add_column( $column => $column_info ) )
-                {
-                    $self->throw_exception(
-                        "Failed to apply renamed_from for $name");
+                    my $rsa_ver = $source->resultset_attributes->{versioned};
+                    $since = $rsa_ver->{since} if $rsa_ver->{since};
                 }
-
             }
 
             # handle changes
@@ -688,6 +724,8 @@ Peter Mottram (SysPete), "peter@sysnix.com"
 =head1 CONTRIBUTORS
 
 Slaven Rezić (eserte)
+Stefan Hornburg (racke)
+Peter Rabbitson (ribasushi)
 
 =head1 BUGS
 
