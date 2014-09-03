@@ -12,17 +12,15 @@ Schema versioning for DBIx::Class with version information embedded inline in th
 
 =head1 WARNING
 
-Although all documented functionality has been implemented it is only possible to use the module currently with MySQL. Tests exist for SQLite and PostgreSQL but upgrade tests are currently broken and so are skipped due to issues with L<SQL::Translator>. I am hoping the SQLT issues can be resolved ASAP.
-
-This is BETA software so the usual caveats apply.
+This is BETA software so the usual caveats apply. This software might drown your kittens and perform other unusual or unexpected beahaviour.
 
 =head1 VERSION
 
-Version 0.011
+Version 0.020
 
 =cut
 
-our $VERSION = '0.011';
+our $VERSION = '0.020';
 
 =head1 SYNOPSIS
 
@@ -288,9 +286,9 @@ sub connection {
 
     my $connect_info = $self->storage->connect_info;
     $self->{vschema} = DBIx::Class::Version->connect(@$connect_info);
-    my $conn_attrs = $self->{vschema}->storage->_dbic_connect_attributes || {};
 
-    my $vtable = $self->{vschema}->resultset('Table');
+    # uncoverable condition right
+    my $conn_attrs = $self->{vschema}->storage->_dbic_connect_attributes || {};
 
     my $version = $conn_attrs->{_version} || $self->get_db_version();
 
@@ -434,30 +432,41 @@ sub upgrade_single_step {
 
     foreach my $source_name ( $target_schema->sources ) {
 
-        my $source    = $target_schema->source($source_name);
+        my $source = $target_schema->source($source_name);
 
         # tables
 
-        my $table       = $target_sqlt->schema->get_table( $source->name );
-        my $versioned   = $source->resultset_attributes->{versioned};
-        my $table_since = $versioned->{since} ? $versioned->{since} : undef;
+        my $table        = $target_sqlt->schema->get_table( $source->name );
+        my $versioned    = $source->resultset_attributes->{versioned};
+        my $table_since  = $versioned->{since};
+        my $renamed_from = $versioned->{renamed_from};
 
         if (   $versioned
-            && $versioned->{renamed_from}
+            && $renamed_from
             && $table_since eq $target_version )
         {
-            $table->extra( renamed_from => $versioned->{renamed_from} );
+            if ( grep { $_ eq $renamed_from } $self->sources ) {
+
+                # $renamed_from smells like class name rather than table
+                $renamed_from =
+                  $self->resultset($renamed_from)->result_source->name;
+            }
+            $table->extra( renamed_from => $renamed_from );
         }
 
         # columns
 
         foreach my $column ( $source->columns ) {
-            my $versioned = $source->column_info($column)->{versioned};
-            if ( $versioned && $versioned->{renamed_from} ) {
-                my $since = $versioned->{since} || $table_since;
+            my $column_info = $source->column_info($column);
+            my $versioned   = $column_info->{versioned};
+            my $renamed =
+              $versioned->{renamed_from} || $column_info->{renamed_from};
+            if ($renamed) {
+                my $since =
+                  $versioned->{since} || $column_info->{since} || $table_since;
                 if ( $since eq $target_version ) {
                     my $field = $table->get_field($column);
-                    $field->extra( renamed_from => $versioned->{renamed_from} );
+                    $field->extra( renamed_from => $renamed );
                 }
             }
         }
@@ -485,7 +494,7 @@ sub upgrade_single_step {
 
                 foreach my $sub (@before_upgrade_subs) {
                     $sub->($self)
-                        or die "Failed upgrade before $target_version sub";
+                      or die "Failed upgrade before $target_version sub";
                 }
 
                 # execute SQL one line at a time
@@ -498,6 +507,14 @@ sub upgrade_single_step {
                     $self->storage->dbh_do(
                         sub {
                             my ( $storage, $dbh ) = @_;
+                            if ( $sqlt_type eq 'SQLite' ) {
+
+                                # FIXME: SQLite barfs on FK constraints
+                                # during temp table copy
+                                if ( $line =~ /CREATE TEMPORARY TABLE/ ) {
+                                    $line =~ s/,\n\s*FOREIGN KEY.+?\n/\n/;
+                                }
+                            }
                             $dbh->do($line);
                         }
                     );
@@ -512,7 +529,7 @@ sub upgrade_single_step {
 
                     foreach my $sub (@after_upgrade_subs) {
                         $sub->($target_schema)
-                            or die "Failed upgrade after $target_version sub";
+                          or die "Failed upgrade after $target_version sub";
                     }
                 }
             }
@@ -527,7 +544,7 @@ sub upgrade_single_step {
 
                     foreach my $sub (@after_upgrade_subs) {
                         $sub->($target_schema)
-                            or die "Failed upgrade after $target_version sub";
+                          or die "Failed upgrade after $target_version sub";
                     }
                 }
             }
@@ -576,10 +593,21 @@ sub versioned_schema {
             my $column_info = $source->column_info($column);
             my $versioned   = $column_info->{versioned};
 
-            my $until   = $versioned->{until};
-            my $since   = $versioned->{since};
-            my $changes = $versioned->{changes};
-            my $renamed = $versioned->{renamed_from};
+            my ( $changes, $renamed, $since, $until );
+            if ($versioned) {
+                $changes = $versioned->{changes};
+                $renamed = $versioned->{renamed_from};
+                $since   = $versioned->{since};
+                $until   = $versioned->{until};
+                $until   = $versioned->{till} if defined $versioned->{till};
+            }
+            else {
+                $changes = $column_info->{changes};
+                $renamed = $column_info->{renamed_from};
+                $since   = $column_info->{since};
+                $until   = $column_info->{until};
+                $until   = $column_info->{till} if defined $column_info->{till};
+            }
 
             # handle since/until first
 
@@ -593,7 +621,7 @@ sub versioned_schema {
 
             # handled renamed column
 
-            if ( $renamed ) {
+            if ($renamed) {
                 unless ($since) {
 
                     # catch sitation where class has since but renamed_from
@@ -647,10 +675,18 @@ sub versioned_schema {
 
             my $versioned = $attrs->{versioned};
 
-            next unless defined $versioned;
-
-            my $since = $versioned->{since};
-            my $until = $versioned->{until};
+            # TODO: changes/renamed_from for relations?
+            my ( $since, $until );
+            if ($versioned) {
+                $since = $versioned->{since};
+                $until = $versioned->{until};
+                $until = $versioned->{till} if defined $versioned->{till};
+            }
+            else {
+                $since = $attrs->{since};
+                $until = $attrs->{until};
+                $until = $attrs->{till} if defined $attrs->{till};
+            }
 
             my $name = "$source_name relationship $relation_name";
             my $sub  = sub {
@@ -692,7 +728,7 @@ sub _since_until {
         push @schema_versions, $since;
     }
     if ($until) {
-        $self->throw_exception("Bad until $until for $name")
+        $self->throw_exception("Bad till/until $until for $name")
           unless version::is_lax($until);
         push @schema_versions, $until;
     }
@@ -713,9 +749,27 @@ sub _since_until {
     }
 }
 
+=head1 CANDY
+
+See L<DBIx::Class::Schema::Versioned::Inline::Candy>.
+
 =head1 CAVEATS
 
 Please anticipate API changes in this early state of development.
+
+=head1 TODO
+
+=over 4
+
+=item * Sequence renaming in Pg, MySQL (maybe?). Not required for SQLite.
+
+=item * Index renaming for auto-created indexes for UCs, etc - Pg + others?
+
+=item * Downgrades
+
+=item * Schema validation
+
+=back
 
 =head1 AUTHOR
 
@@ -767,7 +821,7 @@ L<http://search.cpan.org/dist/DBIx-Class-Schema-Versioned-Inline/>
 
 =head1 ACKNOWLEDGEMENTS
 
-Thanks to Best Practical Solutions for the L<Jifty> framework and L<Jifty::DBI> which inspired this distribution. Thanks also to Matt S. Trout and all of the L<DBIx::Class> developers for an excellent distribution.
+Thanks to Best Practical Solutions for the L<Jifty> framework and L<Jifty::DBI> which inspired this distribution. Many thanks to all of the L<DBIx::Class> and L<SQL::Translator> developers for those excellent distributions and especially to ribasushi and ilmari for all of their help and input.
 
 =head1 LICENSE AND COPYRIGHT
 

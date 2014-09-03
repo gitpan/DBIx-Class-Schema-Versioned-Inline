@@ -24,11 +24,11 @@ no_index:
     - inc
 requires:
   DBIx::Class: '0.0827'
-  SQL::Translator: '0.11018'
+  SQL::Translator: '0.1102'
   Try::Tiny: '0.18'
   perl: '5.006'
   version: '0.9902'
 resources:
   bugtracker: https://github.com/Sysnix/dbix-class-schema-versioned-inline/issues
   repository: https://github.com/Sysnix/dbix-class-schema-versioned-inline.git
-version: '0.011'
+version: '0.020'
