@@ -4,7 +4,7 @@
       "Peter Mottram (SysPete) <peter@sysnix.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.120351",
+   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "perl_5"
    ],
@@ -54,5 +54,5 @@
          "url" : "https://github.com/Sysnix/dbix-class-schema-versioned-inline.git"
       }
    },
-   "version" : "0.022"
+   "version" : "0.023"
 }

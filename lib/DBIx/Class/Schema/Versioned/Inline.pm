@@ -16,11 +16,11 @@ This is BETA software so the usual caveats apply. This software might drown your
 
 =head1 VERSION
 
-Version 0.022
+Version 0.023
 
 =cut
 
-our $VERSION = '0.022';
+our $VERSION = '0.023';
 
 =head1 SYNOPSIS
 
@@ -28,6 +28,7 @@ our $VERSION = '0.022';
 
  use base 'DBIx::Class::Schema::Versioned::Inline';
 
+ our $FIRST_VERSION = '0.001';
  our $VERSION = '0.002';
 
  __PACKAGE__->load_namespaces;
