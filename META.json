@@ -4,7 +4,7 @@
       "Peter Mottram (SysPete) <peter@sysnix.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.140640",
    "license" : [
       "perl_5"
    ],
@@ -22,10 +22,12 @@
    "prereqs" : {
       "build" : {
          "requires" : {
+            "Class::Load" : "0",
             "DBD::SQLite" : "1.4",
             "DBIx::Class::Schema::Loader" : "0.0704",
             "File::Spec" : "3.47",
-            "Test::Most" : "0.33",
+            "Test::Deep" : "0",
+            "Test::Exception" : "0",
             "Test::Roo" : "1.003",
             "Test::Warnings" : "0.012"
          }
@@ -52,7 +54,8 @@
       },
       "repository" : {
          "url" : "https://github.com/Sysnix/dbix-class-schema-versioned-inline.git"
-      }
+      },
+      "x_IRC" : "irc://irc.perl.org/#dbix-class"
    },
-   "version" : "0.023"
+   "version" : "0.025"
 }

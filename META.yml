@@ -3,32 +3,35 @@ abstract: 'Schema versioning for DBIx::Class with version information embedded i
 author:
   - 'Peter Mottram (SysPete) <peter@sysnix.com>'
 build_requires:
-  DBD::SQLite: 1.4
-  DBIx::Class::Schema::Loader: 0.0704
-  File::Spec: 3.47
-  Test::Most: 0.33
-  Test::Roo: 1.003
-  Test::Warnings: 0.012
+  Class::Load: '0'
+  DBD::SQLite: '1.4'
+  DBIx::Class::Schema::Loader: '0.0704'
+  File::Spec: '3.47'
+  Test::Deep: '0'
+  Test::Exception: '0'
+  Test::Roo: '1.003'
+  Test::Warnings: '0.012'
 configure_requires:
-  ExtUtils::MakeMaker: 0
+  ExtUtils::MakeMaker: '0'
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.120921'
+generated_by: 'ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.140640'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: DBIx-Class-Schema-Versioned-Inline
 no_index:
   directory:
     - t
     - inc
 requires:
-  DBIx::Class: 0.0827
-  SQL::Translator: 0.1102
-  Try::Tiny: 0.18
-  perl: 5.006
-  version: 0.9902
+  DBIx::Class: '0.0827'
+  SQL::Translator: '0.1102'
+  Try::Tiny: '0.18'
+  perl: '5.006'
+  version: '0.9902'
 resources:
+  IRC: irc://irc.perl.org/#dbix-class
   bugtracker: https://github.com/Sysnix/dbix-class-schema-versioned-inline/issues
   repository: https://github.com/Sysnix/dbix-class-schema-versioned-inline.git
-version: 0.023
+version: '0.025'
